@@ -116,48 +116,55 @@ def restart_program():
 
 
 def blacklist_check():
-
   async def predicate(ctx):
-    async with aiosqlite.connect('db/block.db') as db:
-      cursor = await db.execute("SELECT 1 FROM user_blacklist WHERE user_id = ?", (str(ctx.author.id),))
-      user_blacklisted = await cursor.fetchone()
-      if user_blacklisted:
-        return False
-
-      cursor = await db.execute("SELECT 1 FROM guild_blacklist WHERE guild_id = ?", (str(ctx.guild.id),))
-      guild_blacklisted = await cursor.fetchone()
-      if guild_blacklisted:
-        return False
-
+    if ctx.author.id in OWNER_IDS or (ctx.guild and ctx.author.id == getattr(ctx.guild, 'owner_id', None)):
+      return True
+    if not ctx.guild:
+      return True
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'db', 'block.db')
+    try:
+      async with aiosqlite.connect(db_path) as db:
+        cursor = await db.execute("SELECT 1 FROM user_blacklist WHERE user_id = ?", (str(ctx.author.id),))
+        if await cursor.fetchone():
+          return False
+        cursor = await db.execute("SELECT 1 FROM guild_blacklist WHERE guild_id = ?", (str(ctx.guild.id),))
+        if await cursor.fetchone():
+          return False
+    except Exception:
+      pass
     return True
 
   return commands.check(predicate)
-    
 
 async def get_ignore_data(guild_id: int) -> dict:
-    async with aiosqlite.connect("db/ignore.db") as db:
-        data = {
-            "channel": set(),
-            "user": set(),
-            "command": set(),
-            "bypassuser": set(),
-        }
+    db_path = os.path.join(os.path.dirname(__file__), '..', 'db', 'ignore.db')
+    data = {
+        "channel": set(),
+        "user": set(),
+        "command": set(),
+        "bypassuser": set(),
+    }
+    if not guild_id:
+        return data
+    try:
+        async with aiosqlite.connect(db_path) as db:
+            async with db.execute("SELECT channel_id FROM ignored_channels WHERE guild_id = ?", (guild_id,)) as cursor:
+                channels = await cursor.fetchall()
+                data["channel"] = {str(channel_id) for (channel_id,) in channels}
 
-        async with db.execute("SELECT channel_id FROM ignored_channels WHERE guild_id = ?", (guild_id,)) as cursor:
-            channels = await cursor.fetchall()
-            data["channel"] = {str(channel_id) for (channel_id,) in channels}
+            async with db.execute("SELECT user_id FROM ignored_users WHERE guild_id = ?", (guild_id,)) as cursor:
+                users = await cursor.fetchall()
+                data["user"] = {str(user_id) for (user_id,) in users}
 
-        async with db.execute("SELECT user_id FROM ignored_users WHERE guild_id = ?", (guild_id,)) as cursor:
-            users = await cursor.fetchall()
-            data["user"] = {str(user_id) for (user_id,) in users}
+            async with db.execute("SELECT command_name FROM ignored_commands WHERE guild_id = ?", (guild_id,)) as cursor:
+                commands = await cursor.fetchall()
+                data["command"] = {command_name.strip().lower() for (command_name,) in commands}
 
-        async with db.execute("SELECT command_name FROM ignored_commands WHERE guild_id = ?", (guild_id,)) as cursor:
-            commands = await cursor.fetchall()
-            data["command"] = {command_name.strip().lower() for (command_name,) in commands}
-
-        async with db.execute("SELECT user_id FROM bypassed_users WHERE guild_id = ?", (guild_id,)) as cursor:
-            bypass_users = await cursor.fetchall()
-            data["bypassuser"] = {str(user_id) for (user_id,) in bypass_users}
+            async with db.execute("SELECT user_id FROM bypassed_users WHERE guild_id = ?", (guild_id,)) as cursor:
+                bypass_users = await cursor.fetchall()
+                data["bypassuser"] = {str(user_id) for (user_id,) in bypass_users}
+    except Exception:
+        pass
 
     return data
 

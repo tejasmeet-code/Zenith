@@ -64,26 +64,61 @@ class Context(commands.Context):
     async def send(self,
                    content: Optional[str] = None,
                    **kwargs) -> Optional[discord.Message]:
-        if not (self.channel.permissions_for(self.me)).send_messages:
-            try:
-                await self.author.send(
-                    "bot dont have perms to send msg in that channel")
-            except discord.Forbidden:  
-                pass
-            return
-        return await super().send(content, **kwargs)
+        if self.guild:
+            me = self.guild.me or self.guild.get_member(self.bot.user.id if self.bot and self.bot.user else 0)
+            if me and hasattr(self.channel, "permissions_for"):
+                try:
+                    perms = self.channel.permissions_for(me)
+                    if hasattr(perms, "send_messages") and not perms.send_messages:
+                        try:
+                            await self.author.send("Bot does not have permissions to send messages in that channel.")
+                        except Exception:
+                            pass
+                        return None
+                except Exception:
+                    pass
+        try:
+            return await super().send(content, **kwargs)
+        except discord.HTTPException as err:
+            view = kwargs.get("view")
+            embed = kwargs.get("embed")
+            if view and not content and not embed:
+                title_str = getattr(view, "_title", None) or "Zenith Bot Response"
+                desc_str = getattr(view, "_description", None) or ""
+                if not desc_str and hasattr(view, "children"):
+                    desc_str = getattr(view, "title", str(view))
+                fallback_embed = discord.Embed(
+                    title=str(title_str),
+                    description=str(desc_str) if desc_str else None,
+                    color=0x2b2d31
+                )
+                kwargs_copy = {k: v for k, v in kwargs.items() if k != "view"}
+                try:
+                    return await super().send(embed=fallback_embed, **kwargs_copy)
+                except Exception:
+                    pass
+            raise err
 
     async def reply(self,
                     content: Optional[str] = None,
                     **kwargs) -> Optional[discord.Message]:
-        if not (self.channel.permissions_for(self.me)).send_messages:
-            try:
-                await self.author.send(
-                    "bot dont have perms to send msg in that channel")
-            except discord.Forbidden:  
-                pass
-            return
-        return await super().reply(content, **kwargs)
+        if self.guild:
+            me = self.guild.me or self.guild.get_member(self.bot.user.id if self.bot and self.bot.user else 0)
+            if me and hasattr(self.channel, "permissions_for"):
+                try:
+                    perms = self.channel.permissions_for(me)
+                    if hasattr(perms, "send_messages") and not perms.send_messages:
+                        try:
+                            await self.author.send("Bot does not have permissions to send messages in that channel.")
+                        except Exception:
+                            pass
+                        return None
+                except Exception:
+                    pass
+        try:
+            return await super().reply(content, **kwargs)
+        except discord.HTTPException:
+            return await self.send(content, **kwargs)
 
     async def release(self, delay: Optional[int] = None) -> None:
         delay = delay or 0

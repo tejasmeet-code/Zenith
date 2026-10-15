@@ -77,37 +77,34 @@ class AutoBlacklist(Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message):
-        if message.author.bot:
+        if message.author.bot or not message.guild:
             return
 
-        
-        guild_id = message.guild.id if message.guild else None
-        if guild_id:
-            if guild_id not in self.guild_command_tracking:
-                self.guild_command_tracking[guild_id] = []
+        ctx = await self.client.get_context(message)
+        if not ctx.valid:
+            return
 
-            
-            self.guild_command_tracking[guild_id].append(datetime.utcnow())
+        guild_id = message.guild.id
+        if guild_id not in self.guild_command_tracking:
+            self.guild_command_tracking[guild_id] = []
 
-            
-            self.guild_command_tracking[guild_id] = [
-                timestamp for timestamp in self.guild_command_tracking[guild_id] if timestamp >= datetime.utcnow() - timedelta(seconds=2)
-            ]
+        self.guild_command_tracking[guild_id].append(datetime.utcnow())
+        self.guild_command_tracking[guild_id] = [
+            timestamp for timestamp in self.guild_command_tracking[guild_id] if timestamp >= datetime.utcnow() - timedelta(seconds=2)
+        ]
 
-            
-            if len(self.guild_command_tracking[guild_id]) > 8:
-                
-                await self.add_to_blacklist(guild_id=guild_id, channel=message.channel)
-                embed = discord.Embed(
-                    title=f"{ZWARNING} Guild Blacklisted",
-                    description=(
-                        f"The guild has been blacklisted for excessive command usage. "
-                        f"If you believe this is a mistake, please contact our [Support Server](https://discord.gg/codexdev)."
-                    ),
-                    color=0xFF0000
-                )
-                await message.channel.send(embed=embed)
-                return
+        if len(self.guild_command_tracking[guild_id]) > 25:
+            await self.add_to_blacklist(guild_id=guild_id, channel=message.channel)
+            embed = discord.Embed(
+                title=f"{ZWARNING} Guild Blacklisted",
+                description=(
+                    f"The guild has been blacklisted for excessive automated command spam. "
+                    f"If you believe this is a mistake, please contact our [Support Server](https://discord.gg/codexdev)."
+                ),
+                color=0xFF0000
+            )
+            await message.channel.send(embed=embed)
+            return
 
         
         bucket = self.spam_cd_mapping.get_bucket(message)
