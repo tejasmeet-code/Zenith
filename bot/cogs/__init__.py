@@ -40,6 +40,7 @@ from .commands.block import Block
 from .commands.nightmode import Nightmode
 from .commands.tracking import Tracking
 from .commands.owner import Badges
+from .commands.staff import StaffAndPremium
 #from .commands.map import Map
 from .commands.autoresponder import AutoResponder
 from .commands.customrole import Customrole
@@ -241,6 +242,7 @@ async def setup(bot: zyrox):
   await bot.add_cog(FilterCog(bot))
   await bot.add_cog(Global(bot))
  # await bot.add_cog(Map(bot))
+  await bot.add_cog(StaffAndPremium(bot))
   await bot.add_cog(TicketCog(bot))
   await bot.add_cog(Logging(bot))
   await bot.add_cog(QR(bot))

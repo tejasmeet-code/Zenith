@@ -173,7 +173,7 @@ class SupabaseStorageManager:
             with urllib.request.urlopen(req, timeout=10) as resp:
                 return resp.status in (200, 201, 204)
         except Exception as e:
-            logger.error(f"[Supabase] Error saving json store '{store_name}': {e}")
+            pass
             return False
 
     def get_json_store(self, store_name: str) -> Optional[Any]:

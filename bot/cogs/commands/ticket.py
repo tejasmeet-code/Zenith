@@ -57,7 +57,8 @@ class TicketDatabase:
 
     def _create_tables(self):
         with self.conn:
-            self.conn.execute("CREATE TABLE IF NOT EXISTS guild_configs (guild_id INTEGER PRIMARY KEY, panel_channel_id INTEGER, logging_channel_id INTEGER, panel_message_id INTEGER, panel_type TEXT, embed_title TEXT, embed_description TEXT, embed_color INTEGER, embed_image_url TEXT, embed_thumbnail_url TEXT, closed_category_id INTEGER)")
+            self.conn.execute("CREATE TABLE IF NOT EXISTS guild_configs (guild_id INTEGER PRIMARY KEY, panel_channel_id INTEGER, logging_channel_id INTEGER, panel_message_id INTEGER, panel_type TEXT, embed_title TEXT, embed_description TEXT, embed_color INTEGER, embed_image_url TEXT, embed_thumbnail_url TEXT, closed_category_id INTEGER, support_start INTEGER DEFAULT 0, support_end INTEGER DEFAULT 24, is_247 BOOLEAN DEFAULT TRUE, timezone TEXT DEFAULT 'UTC')")
+            self.conn.execute("CREATE TABLE IF NOT EXISTS multi_panels (panel_id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER, channel_id INTEGER, message_id INTEGER, panel_type TEXT, title TEXT, description TEXT, sub_panels TEXT)")
             self.conn.execute("CREATE TABLE IF NOT EXISTS ticket_categories (category_id INTEGER PRIMARY KEY AUTOINCREMENT, guild_id INTEGER, name TEXT NOT NULL, emoji TEXT, notified_roles TEXT, button_style INTEGER, discord_category_id INTEGER, FOREIGN KEY (guild_id) REFERENCES guild_configs(guild_id) ON DELETE CASCADE)")
             self.conn.execute("CREATE TABLE IF NOT EXISTS open_tickets (channel_id INTEGER PRIMARY KEY, ticket_number INTEGER, guild_id INTEGER, creator_id INTEGER NOT NULL, category_db_id INTEGER, created_at TEXT NOT NULL, closed_by_id INTEGER, closed_at TEXT, is_locked BOOLEAN DEFAULT FALSE, is_claimed BOOLEAN DEFAULT FALSE, claimed_by_id INTEGER, FOREIGN KEY (guild_id) REFERENCES guild_configs(guild_id) ON DELETE CASCADE, FOREIGN KEY (category_db_id) REFERENCES ticket_categories(category_id) ON DELETE SET NULL)")
             self.conn.execute("CREATE TABLE IF NOT EXISTS user_ticket_counts (guild_id INTEGER, user_id INTEGER, ticket_count INTEGER DEFAULT 0, PRIMARY KEY (guild_id, user_id))")
@@ -296,7 +297,28 @@ class TicketCog(commands.Cog, name="Ticket System"):
     async def on_interaction(self, inter):
         if inter.type == discord.InteractionType.component and (cid := inter.data.get("custom_id","")).startswith("create_ticket_"): await self.create_ticket_flow(inter, int(cid.split("_")[-1]))
 
+        async def check_support_hours(db, guild_id: int):
+            row = db.fetchone("SELECT support_start, support_end, is_247, timezone FROM guild_configs WHERE guild_id=?", (guild_id,))
+            if not row:
+                return True, ""
+            if row.get("is_247", 1):
+                return True, ""
+            start = row.get("support_start", 0)
+            end = row.get("support_end", 24)
+            from datetime import datetime
+            current_hour = datetime.utcnow().hour
+            if start <= end:
+                in_hours = start <= current_hour < end
+            else:
+                in_hours = current_hour >= start or current_hour < end
+            if not in_hours:
+                return False, f"Ticket support is currently offline.\n**Operating Hours:** {start:02d}:00 - {end:02d}:00 UTC (Current UTC: {current_hour:02d}:00)"
+            return True, ""
+
     async def create_ticket_flow(self, inter, cat_id):
+        is_open, msg = await check_support_hours(self.db, inter.guild.id)
+        if not is_open:
+            return await inter.response.send_message(f"⏰ {msg}", ephemeral=True)
         await inter.response.defer(ephemeral=True)
         guild, user = inter.guild, inter.user
         if (count := self.db.fetchone("SELECT ticket_count FROM user_ticket_counts WHERE guild_id=? AND user_id=?",(guild.id,user.id))) and count['ticket_count'] >= TICKET_LIMIT_PER_USER: return await inter.followup.send(f"You have reached the max of {TICKET_LIMIT_PER_USER} open tickets.",ephemeral=True)
