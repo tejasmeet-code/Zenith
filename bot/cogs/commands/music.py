@@ -601,6 +601,13 @@ class Music(commands.Cog):
     @ignore_check()
     @commands.cooldown(1, 3, commands.BucketType.user)
     async def play(self, ctx: commands.Context, *, query: str):
+        try:
+            nodes = wavelink.Pool.nodes
+            if not nodes:
+                await ctx.send(view=CV2('❌ Music node is currently offline or unavailable. Please try again later.'))
+                return
+        except Exception:
+            pass
         
         await self.play_source(ctx, query)
 
