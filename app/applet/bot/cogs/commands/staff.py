@@ -62,39 +62,36 @@ class BotStaff(Cog):
 
         try:
             embed = discord.Embed(
-                title='🛡️ Staff Appointment & Contract',
-                description=f'You have been appointed as **{role.upper()}** for Zenith Bot!\n\n'
-                            f'To activate your staff status and benefits, please join our [Support Server](https://discord.gg/q4ybG2DUay) and run the following command:\n\n'
-                            f'```.staffjoin {code}```\n\n'
-                            f'Your contract duration is **{duration_days} days**.',
+                title='Staff Appointment & Contract',
+                description='You have been appointed as ' + role.upper() + ' for Zenith Bot!\n\nTo activate your staff status and benefits, please join our Support Server and run:\n\n.staffjoin ' + code + '\n\nContract duration: ' + str(duration_days) + ' days.',
                 color=0x00FF00
             )
             await member.send(embed=embed)
-            await ctx.reply(f'✅ Successfully appointed {member.mention} as {role}. Appointment DM sent with code.')
+            await ctx.reply('Successfully appointed ' + member.mention + ' as ' + role + '. Appointment DM sent.')
         except Exception as e:
-            await ctx.reply(f'⚠️ Appointed in database, but failed to send DM: {e}. Code is `{code}`')
+            await ctx.reply('Appointed in database, but failed to send DM: ' + str(e) + '. Code: ' + code)
 
     @commands.command(name='staffjoin')
     async def staff_join(self, ctx: Context, code: str):
         if ctx.guild.id != SUPPORT_SERVER_ID:
-            await ctx.reply(f'❌ Please run this command in the official support server: https://discord.gg/q4ybG2DUay', delete_after=10)
+            await ctx.reply('Please run this command in the official support server: https://discord.gg/q4ybG2DUay', delete_after=10)
             return
         
         async with aiosqlite.connect(self.db_path) as db:
             async with db.execute('SELECT user_id, role, expires_at, status FROM staff_members WHERE code = ?', (code,)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
-                    await ctx.reply('❌ Invalid staff code.', delete_after=8)
+                    await ctx.reply('Invalid staff code.', delete_after=8)
                     return
                 user_id, role, expires_at, status = row
                 if str(ctx.author.id) != user_id:
-                    await ctx.reply('❌ This code does not belong to you.', delete_after=8)
+                    await ctx.reply('This code does not belong to you.', delete_after=8)
                     return
                 
                 await db.execute('UPDATE staff_members SET status = ? WHERE code = ?', ('active', code))
                 await db.commit()
 
-        await ctx.reply(f'🎉 **Congratulations {ctx.author.mention}!** Your staff status (`{role.upper()}`) is now active with global benefits!', delete_after=15)
+        await ctx.reply('Congratulations ' + ctx.author.mention + '! Your staff status (' + role.upper() + ') is now active.', delete_after=15)
 
     @commands.command(name='contractrenew')
     async def contract_renew(self, ctx: Context):
@@ -102,23 +99,23 @@ class BotStaff(Cog):
             async with db.execute('SELECT role, expires_at FROM staff_members WHERE user_id = ?', (str(ctx.author.id),)) as cursor:
                 row = await cursor.fetchone()
                 if not row:
-                    await ctx.reply('❌ You are not registered as a staff member.', delete_after=8)
+                    await ctx.reply('You are not registered as a staff member.', delete_after=8)
                     return
                 role, expires_at = row
 
         channel = self.bot.get_channel(APPROVAL_CHANNEL_ID)
         if not channel:
-            await ctx.reply('❌ Approval channel not found. Please contact the founder.', delete_after=8)
+            await ctx.reply('Approval channel not found.', delete_after=8)
             return
 
         view = RenewalApprovalView(ctx.author.id, role)
         embed = discord.Embed(
-            title='📜 Staff Contract Renewal Request',
-            description=f'Staff Member: {ctx.author.mention} (`{ctx.author.id}`)\nRole: **{role.upper()}**\nCurrent Expiry: `{expires_at}`',
+            title='Staff Contract Renewal Request',
+            description='Staff Member: ' + str(ctx.author) + '\nRole: ' + role.upper() + '\nCurrent Expiry: ' + str(expires_at),
             color=0xFFA500
         )
         await channel.send(embed=embed, view=view)
-        await ctx.reply('📨 Contract renewal request sent to upper management for approval!', delete_after=10)
+        await ctx.reply('Contract renewal request sent for approval!', delete_after=10)
 
 class RenewalApprovalView(discord.ui.View):
     def __init__(self, user_id: int, role: str):
@@ -129,7 +126,7 @@ class RenewalApprovalView(discord.ui.View):
     @discord.ui.button(label='Approve Renewal', style=discord.ButtonStyle.green, custom_id='staff_renew_approve')
     async def approve(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not (interaction.user.id in [1181221352393420856, 870179991462236170]):
-            await interaction.response.send_message('❌ Only founders/owners can approve renewals.', ephemeral=True)
+            await interaction.response.send_message('Only founders/owners can approve renewals.', ephemeral=True)
             return
         
         new_expires = (datetime.datetime.utcnow() + datetime.timedelta(days=30)).isoformat()
@@ -142,18 +139,43 @@ class RenewalApprovalView(discord.ui.View):
 
         try:
             user = await interaction.client.fetch_user(self.user_id)
-            await user.send(f'✅ Your staff contract has been renewed for 30 days! Your new activation code is: `{new_code}`')
+            await user.send('Your staff contract has been renewed for 30 days! Activation code: ' + new_code)
         except Exception:
             pass
 
-        await interaction.response.edit_message(content=f'✅ Renewal approved by {interaction.user.mention}. New code generated.', view=None)
+        await interaction.response.edit_message(content='Renewal approved. New code generated.', view=None)
 
     @discord.ui.button(label='Deny Renewal', style=discord.ButtonStyle.red, custom_id='staff_renew_deny')
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
         if not (interaction.user.id in [1181221352393420856, 870179991462236170]):
-            await interaction.response.send_message('❌ Only founders/owners can deny renewals.', ephemeral=True)
+            await interaction.response.send_message('Only founders/owners can deny renewals.', ephemeral=True)
             return
-        await interaction.response.edit_message(content=f'❌ Renewal denied by {interaction.user.mention}.', view=None)
+        await interaction.response.edit_message(content='Renewal denied.', view=None)
+
+class StaffHelpView(discord.ui.View):
+    def __init__(self, ctx):
+        super().__init__(timeout=120)
+        self.ctx = ctx
+
+    @discord.ui.button(label='Staff & Owner Commands', style=discord.ButtonStyle.primary)
+    async def staff_cmds(self, interaction: discord.Interaction, button: discord.ui.Button):
+        embed = discord.Embed(
+            title='Staff & Owner Command Directory',
+            description='.staff appoint <user> <role> [days] - Appoint staff\n.staffjoin <code> - Activate contract\n.contractrenew - Request renewal',
+            color=0x00FF00
+        )
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@commands.command(name='staffhelp')
+async def staff_help(ctx: Context):
+    embed = discord.Embed(
+        title='Zenith Staff Help Panel',
+        description='Click the button below to view global staff and owner commands.',
+        color=0x2b2d31
+    )
+    view = StaffHelpView(ctx)
+    await ctx.reply(embed=embed, view=view)
 
 def setup(bot):
     bot.add_cog(BotStaff(bot))
+    bot.add_command(staff_help)
